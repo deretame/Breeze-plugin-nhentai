@@ -1,0 +1,43 @@
+{
+  "name": "nhentai",
+  "uuid": "416598d0-84d0-4de9-8ec5-e74816e768f2",
+  "iconUrl": "https://raw.githubusercontent.com/deretame/Breeze-plugin-nhentai/main/assets/Nhentai_idAD-FU-t__1.svg",
+  "creator": {
+    "name": "Breeze plugin",
+    "describe": "nhentai source adapter"
+  },
+  "describe": "nhentai 漫画源插件",
+  "version": "0.0.1",
+  "updateUrl": "https://api.github.com/repos/deretame/Breeze-plugin-nhentai/releases/latest",
+  "home": "https://github.com/deretame/Breeze-plugin-nhentai",
+  "npmName": "breeze-plugin-nhentai",
+  "function": [
+    {
+      "id": "latest",
+      "title": "最新",
+      "action": {
+        "type": "openComicList",
+        "payload": {
+          "scene": {
+            "title": "nhentai",
+            "source": "416598d0-84d0-4de9-8ec5-e74816e768f2",
+            "body": {
+              "type": "pluginPagedComicList",
+              "request": {
+                "fnPath": "getRankingData",
+                "core": {},
+                "extern": {
+                  "sortBy": "date"
+                }
+              }
+            },
+            "filter": {
+              "fnPath": "getRankingFilterBundle",
+              "extern": {}
+            }
+          }
+        }
+      }
+    }
+  ]
+}
