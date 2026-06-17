@@ -70,6 +70,10 @@ export const runtime = {
       "runtime.is_task_group_cancelled",
       taskGroupKey,
     ) as Promise<boolean>,
+  nativePut: (input: Uint8Array) =>
+    bridge.call("native.put", input) as Promise<number>,
+  nativeTake: (id: number) =>
+    bridge.call("native.take", id) as Promise<Uint8Array>,
 };
 
 export const opencc = {

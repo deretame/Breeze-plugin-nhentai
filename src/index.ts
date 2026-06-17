@@ -1,3 +1,4 @@
+import { unzip } from "fflate";
 import type {
   ActionItem,
   AdvancedSearchContract,
@@ -36,12 +37,14 @@ import {
   toStringMap,
 } from "./common";
 import { buildPluginInfo } from "./get-info";
+import { cache, pluginConfig, runtime } from "./tools";
 
 const WEB_BASE = "https://nhentai.net";
 const API_BASE = "https://nhentai.net/api/v2";
 const IMAGE_BASE = "https://i3.nhentai.net";
 const THUMB_BASE = "https://t3.nhentai.net";
 const MAIN_CHAPTER_ID = "main";
+const API_KEY_CONFIG_KEY = "apiKey";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -204,12 +207,17 @@ function buildSearchUrl(keyword: string, page: number, sort: string): string {
 }
 
 async function fetchJson<T>(url: string, timeoutMs = 30000): Promise<T> {
+  const apiKey = await loadApiKey({});
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    Referer: `${WEB_BASE}/`,
+    "User-Agent": "Breeze-plugin-nhentai/0.1.0",
+  };
+  if (apiKey) {
+    headers.Authorization = `Key ${apiKey}`;
+  }
   const res = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-      Referer: `${WEB_BASE}/`,
-      "User-Agent": "Breeze-plugin-nhentai/0.1.0",
-    },
+    headers,
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
@@ -224,6 +232,157 @@ async function fetchGallery(comicId: string): Promise<NhentaiGallery> {
   return fetchJson<NhentaiGallery>(
     `${API_BASE}/galleries/${encodeURIComponent(id)}?include=related,favorite`,
   );
+}
+
+async function loadApiKey(extern: unknown): Promise<string> {
+  const fromExtern = toText(toStringMap(extern).apiKey);
+  if (fromExtern) return fromExtern;
+
+  const raw = await pluginConfig.load(API_KEY_CONFIG_KEY, "");
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw) as { value?: unknown };
+    const value = toText(parsed.value);
+    if (value) return value;
+  } catch {
+    // 某些情况下可能直接返回原值
+  }
+  return "";
+}
+
+async function fetchDownloadUrl(
+  comicId: string,
+  apiKey: string,
+): Promise<string> {
+  const res = await fetch(
+    `${API_BASE}/galleries/${encodeURIComponent(comicId)}/download?format=zip`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Key ${apiKey}`,
+        Referer: `${WEB_BASE}/`,
+        "User-Agent": "Breeze-plugin-nhentai/0.1.0",
+      },
+      signal: AbortSignal.timeout(60000),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`nhentai 下载请求失败: HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as { url?: string; expires_at?: number };
+  const url = toText(data.url);
+  if (!url) throw new Error("nhentai 未返回下载链接");
+  return url;
+}
+
+async function fetchBinary(
+  url: string,
+  timeoutMs = 120000,
+): Promise<Uint8Array> {
+  const targetUrl = toText(url);
+  if (!targetUrl) throw new Error("下载链接不能为空");
+  const res = await fetch(targetUrl, {
+    headers: {
+      Referer: `${WEB_BASE}/`,
+      "User-Agent": "Breeze-plugin-nhentai/0.1.0",
+      "x-rquickjs-host-offload-binary-v1": "1",
+    },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) {
+    throw new Error(`压缩包下载失败: HTTP ${res.status}`);
+  }
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+function unzipAsync(zip: Uint8Array): Promise<Record<string, Uint8Array>> {
+  return new Promise((resolve, reject) => {
+    unzip(zip, (err, data) => {
+      if (err) reject(err);
+      else resolve(data as Record<string, Uint8Array>);
+    });
+  });
+}
+
+function naturalCompare(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function isImageFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (
+    !lower.endsWith("/") &&
+    !lower.endsWith(".json") &&
+    (lower.endsWith(".jpg") ||
+      lower.endsWith(".jpeg") ||
+      lower.endsWith(".png") ||
+      lower.endsWith(".webp") ||
+      lower.endsWith(".gif") ||
+      lower.endsWith(".avif") ||
+      lower.endsWith(".bmp"))
+  );
+}
+
+function buildImageKey(comicId: string, imageName: string): string {
+  return `${PLUGIN_ID}:${comicId}:${imageName}`;
+}
+
+async function storeZipImages(
+  comicId: string,
+  zipBytes: Uint8Array,
+): Promise<ChapterPage[]> {
+  const extracted = await unzipAsync(zipBytes);
+  const entries = Object.entries(extracted)
+    .filter(([name, data]) => isImageFile(name) && data.length > 0)
+    .sort(([a], [b]) => naturalCompare(a, b));
+
+  if (entries.length === 0) {
+    throw new Error("压缩包中没有找到图片文件");
+  }
+
+  const pages: ChapterPage[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const [name, data] = entries[i];
+    const pageNo = i + 1;
+    const imageKey = buildImageKey(comicId, name);
+    const nativeId = await runtime.nativePut(data);
+    await cache.set(imageKey, nativeId);
+    pages.push({
+      id: String(pageNo),
+      name,
+      path: name,
+      url: "",
+      extern: {
+        comicId,
+        imageName: name,
+        imageKey,
+      },
+    });
+  }
+  return pages;
+}
+
+function mergeZipPagesWithGallery(
+  zipPages: ChapterPage[],
+  gallery: NhentaiGallery,
+): ChapterPage[] {
+  const galleryPages = asArray<NhentaiPage>(gallery.pages);
+  return zipPages.map((page, index) => {
+    const galleryPage = galleryPages[index];
+    if (!galleryPage) return page;
+    const path = toText(galleryPage.path);
+    return {
+      ...page,
+      url: absolutize(IMAGE_BASE, path),
+      extern: {
+        ...page.extern,
+        thumbnail: absolutize(THUMB_BASE, galleryPage.thumbnail),
+        width: galleryPage.width ?? null,
+        height: galleryPage.height ?? null,
+      },
+    };
+  });
 }
 
 function galleryId(gallery: NhentaiGallery): string {
@@ -509,8 +668,20 @@ async function getChapter(
   payload: ChapterPayload = {},
 ): Promise<ChapterContentContract> {
   const comicId = toText(payload.comicId);
+  if (!comicId) throw new Error("comicId 不能为空");
+
+  const apiKey = await loadApiKey(payload.extern);
+  if (!apiKey) throw new Error("请设置api key");
+
+  const downloadUrl = await fetchDownloadUrl(comicId, apiKey);
+  const zipBytes = await fetchBinary(downloadUrl);
+  const zipPages = await storeZipImages(comicId, zipBytes);
+
   const gallery = await fetchGallery(comicId);
-  const chapter = buildChapterWithPages(gallery);
+  const chapterSummary = buildChapterSummary(gallery);
+  const pages = mergeZipPagesWithGallery(zipPages, gallery);
+  const chapter: ChapterWithPages = { ...chapterSummary, pages };
+
   return {
     source: PLUGIN_ID,
     comicId,
@@ -529,16 +700,28 @@ async function getChapter(
         extern: { webUrl: `${WEB_BASE}/g/${galleryId(gallery)}/` },
       },
       chapter,
-      chapters: [buildChapterSummary(gallery)],
+      chapters: [chapterSummary],
     },
   };
 }
 
-async function fetchImageBytes({
-  url = "",
-  timeoutMs = 30000,
-}: FetchImageBytesPayload = {}): Promise<Uint8Array<ArrayBufferLike>> {
-  const targetUrl = toText(url);
+async function fetchImageBytes(
+  payload: FetchImageBytesPayload = {},
+): Promise<Uint8Array<ArrayBufferLike>> {
+  const targetUrl = toText(payload.url);
+  const imageKey = toText(toStringMap(payload.extern).imageKey);
+
+  if (imageKey) {
+    try {
+      const nativeId = await cache.get<number | null>(imageKey, null);
+      if (nativeId != null) {
+        return await runtime.nativeTake(nativeId);
+      }
+    } catch {
+      // nativeTake 失败或缓存未命中，继续回退到 URL 下载
+    }
+  }
+
   if (!targetUrl) throw new Error("url 不能为空");
   const res = await fetch(targetUrl, {
     headers: {
@@ -546,7 +729,7 @@ async function fetchImageBytes({
       "User-Agent": "Breeze-plugin-nhentai/0.1.0",
       "x-rquickjs-host-offload-binary-v1": "1",
     },
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: AbortSignal.timeout(payload.timeoutMs || 30000),
   });
   if (!res.ok) {
     throw new Error(`图片请求失败: HTTP ${res.status}`);
@@ -726,16 +909,32 @@ async function getCommentFeed(
 }
 
 async function getSettingsBundle(): Promise<SettingsBundleContract> {
+  const apiKey = await loadApiKey({});
   return {
     source: PLUGIN_ID,
     scheme: {
       version: "1.0.0",
       type: "settings",
-      sections: [],
+      sections: [
+        {
+          id: "account",
+          title: "账户",
+          fields: [
+            {
+              key: API_KEY_CONFIG_KEY,
+              kind: "text",
+              label: "nhentai API Key",
+              persist: true,
+            },
+          ],
+        },
+      ],
     },
     data: {
       canShowUserInfo: false,
-      values: {},
+      values: {
+        [API_KEY_CONFIG_KEY]: apiKey,
+      },
     },
   };
 }
