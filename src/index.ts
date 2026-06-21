@@ -2,6 +2,7 @@ import { unzip } from "fflate";
 import type {
   ActionItem,
   AdvancedSearchContract,
+  CapabilitiesBundleContract,
   ChapterContentContract,
   ChapterPage,
   ChapterPayload,
@@ -42,7 +43,7 @@ import {
   toStringMap,
 } from "./common";
 import { buildPluginInfo } from "./get-info";
-import { cache, pluginConfig, runtime } from "./tools";
+import { cache, flutterTools, pluginConfig, runtime } from "./tools";
 
 const WEB_BASE = "https://nhentai.net";
 const API_BASE = "https://nhentai.net/api/v2";
@@ -258,11 +259,13 @@ function buildSearchUrl(keyword: string, page: number, sort: string): string {
 }
 
 async function fetchJson<T>(url: string, timeoutMs?: number): Promise<T>;
+
 async function fetchJson<T>(
   url: string,
   extern?: unknown,
   timeoutMs?: number,
 ): Promise<T>;
+
 async function fetchJson<T>(
   url: string,
   externOrTimeout: unknown = 30000,
@@ -384,6 +387,54 @@ async function loadApiKey(extern: unknown): Promise<string> {
     // 某些情况下可能直接返回原值
   }
   return "";
+}
+
+async function validateApiKey(apiKey: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/user`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Key ${apiKey}`,
+        Referer: `${WEB_BASE}/`,
+        "User-Agent": "Breeze-plugin-nhentai/0.1.0",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.status === 401 || res.status === 403) {
+      return false;
+    }
+    // 网络抖动或 5xx 时不贸然判定为失效
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+async function clearApiKey(): Promise<void> {
+  await pluginConfig.save(API_KEY_CONFIG_KEY, "");
+}
+
+async function showInvalidApiKeyWarning(): Promise<void> {
+  try {
+    await flutterTools.showToast({
+      title: "API Key 无效",
+      message: "nhentai API Key 已失效，已被自动清空，请重新设置。",
+      level: "warning",
+      seconds: 5,
+    });
+  } catch {
+    // 宿主不支持 toast 时静默失败
+  }
+}
+
+async function ensureApiKeyValid(): Promise<void> {
+  const apiKey = await loadApiKey({});
+  if (!apiKey) return;
+  if (!(await validateApiKey(apiKey))) {
+    await clearApiKey();
+    await showInvalidApiKeyWarning();
+  }
 }
 
 async function loadCdnBasesFromConfig(): Promise<{
@@ -818,6 +869,11 @@ async function init() {
   } catch (err) {
     // 黑名单加载失败不影响搜索，只是不过滤
     console.error("[nhentai] 黑名单加载失败:", err);
+  }
+  try {
+    await ensureApiKeyValid();
+  } catch (err) {
+    console.error("[nhentai] API Key 校验失败:", err);
   }
 }
 
@@ -1311,7 +1367,9 @@ async function getCommentFeed(
     (comment, index) => {
       const author = asRecord(comment.poster);
       const avatarPath = toText(author.avatar_url);
-      const avatarUrl = avatarPath ? absolutize(cdnBases.image, avatarPath) : "";
+      const avatarUrl = avatarPath
+        ? absolutize(cdnBases.image, avatarPath)
+        : "";
       return {
         id: toText(comment.id) || `comment-${index + 1}`,
         author: {
@@ -1344,6 +1402,38 @@ async function getCommentFeed(
   };
 }
 
+async function onApiKeyChanged(payload: Record<string, unknown> = {}): Promise<{
+  ok: boolean;
+  message: string;
+  raw: unknown;
+}> {
+  const apiKey = toText(payload.value);
+  console.log("API Key changed:", apiKey);
+  if (!apiKey) {
+    return {
+      ok: false,
+      message: "API Key 不能为空",
+      raw: "",
+    };
+  }
+
+  if (!(await validateApiKey(apiKey))) {
+    await clearApiKey();
+    await showInvalidApiKeyWarning();
+    return {
+      ok: false,
+      message: "API Key 已失效，请重新设置 nhentai API Key",
+      raw: "",
+    };
+  }
+
+  return {
+    ok: true,
+    message: "API Key 已保存",
+    raw: apiKey,
+  };
+}
+
 async function getSettingsBundle(): Promise<SettingsBundleContract> {
   const apiKey = await loadApiKey({});
   return {
@@ -1361,6 +1451,7 @@ async function getSettingsBundle(): Promise<SettingsBundleContract> {
               kind: "text",
               label: "nhentai API Key",
               persist: true,
+              fnPath: "onApiKeyChanged",
             },
           ],
         },
@@ -1372,6 +1463,18 @@ async function getSettingsBundle(): Promise<SettingsBundleContract> {
         [API_KEY_CONFIG_KEY]: apiKey,
       },
     },
+  };
+}
+
+export async function getCapabilitiesBundle(): Promise<CapabilitiesBundleContract> {
+  return {
+    source: PLUGIN_ID,
+    scheme: {
+      version: "1.0.0" as const,
+      type: "capabilities" as const,
+      actions: [],
+    },
+    data: {},
   };
 }
 
@@ -1391,6 +1494,26 @@ async function getUserInfoBundle(): Promise<UserInfoBundleContract> {
           extern: {},
         }),
         lines: ["请设置 nhentai API Key"],
+      },
+    };
+  }
+
+  if (!(await validateApiKey(apiKey))) {
+    await clearApiKey();
+    await showInvalidApiKeyWarning();
+    return {
+      source: PLUGIN_ID,
+      scheme: { version: "1.0.0", type: "userInfo" },
+      data: {
+        title: "未登录",
+        avatar: createImage({
+          id: "",
+          url: "",
+          name: "avatar",
+          path: "",
+          extern: {},
+        }),
+        lines: ["API Key 已失效，请重新设置 nhentai API Key"],
       },
     };
   }
@@ -1467,6 +1590,8 @@ export default {
   getRankingFilterBundle,
   getCommentFeed,
   getSettingsBundle,
+  getCapabilitiesBundle,
+  onApiKeyChanged,
   getUserInfoBundle,
   toggleFavorite,
   listFavoriteFolders,
