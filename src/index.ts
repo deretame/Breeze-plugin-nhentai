@@ -1306,7 +1306,7 @@ async function getRankingFilterBundle(): Promise<FilterBundleContract> {
     source: PLUGIN_ID,
     scheme: {
       version: "1.0.0",
-      title: "排序",
+      title: "筛选",
       fields: [
         {
           key: "sortBy",
@@ -1340,9 +1340,36 @@ async function getRankingFilterBundle(): Promise<FilterBundleContract> {
             },
           ],
         },
+        {
+          key: "languages",
+          kind: "choice",
+          label: "语言",
+          options: [
+            {
+              label: "所有",
+              value: "all",
+              result: { extern: { languages: "all" } },
+            },
+            {
+              label: "仅中文",
+              value: "chinese",
+              result: { extern: { languages: "chinese" } },
+            },
+            {
+              label: "仅日文",
+              value: "japanese",
+              result: { extern: { languages: "japanese" } },
+            },
+            {
+              label: "仅英文",
+              value: "english",
+              result: { extern: { languages: "english" } },
+            },
+          ],
+        },
       ],
     },
-    data: { values: { sortBy: "date" } },
+    data: { values: { sortBy: "date", languages: "all" } },
   };
 }
 

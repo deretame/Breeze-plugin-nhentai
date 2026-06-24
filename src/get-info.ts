@@ -12,7 +12,7 @@ export function buildPluginInfo(): InfoContract {
       describe: "nhentai source adapter",
     },
     describe: "nhentai 漫画源插件",
-    version: "0.0.3",
+    version: "0.0.4",
     updateUrl:
       "https://api.github.com/repos/deretame/Breeze-plugin-nhentai/releases/latest",
     home: "https://github.com/deretame/Breeze-plugin-nhentai",
