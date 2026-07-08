@@ -21,6 +21,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
+    "breeze-plugin-kit": "^0.3.0",
     "fflate": "^0.8.3"
   }
 }

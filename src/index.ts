@@ -1,4 +1,3 @@
-import { unzip } from "fflate";
 import type {
   ActionItem,
   AdvancedSearchContract,
@@ -33,7 +32,9 @@ import type {
   ToggleFavoritePayload,
   ToggleFavoriteResult,
   UserInfoBundleContract,
-} from "../types/type";
+} from "breeze-plugin-kit";
+import { cache, flutterTools, pluginConfig } from "breeze-plugin-kit";
+import { unzip } from "fflate";
 import {
   NOT_FOUND_IMAGE_URL,
   PLUGIN_ID,
@@ -43,7 +44,6 @@ import {
   toStringMap,
 } from "./common";
 import { buildPluginInfo } from "./get-info";
-import { cache, flutterTools, pluginConfig, runtime } from "./tools";
 
 const WEB_BASE = "https://nhentai.net";
 const API_BASE = "https://nhentai.net/api/v2";
@@ -624,7 +624,7 @@ async function storeZipImages(
     const [name, data] = entries[i];
     const pageNo = i + 1;
     const imageKey = buildImageKey(comicId, name);
-    const nativeId = await runtime.nativePut(data);
+    const nativeId = await native.put(data);
     await cache.set(imageKey, nativeId);
     pages.push({
       id: String(pageNo),
@@ -1053,7 +1053,7 @@ async function fetchImageBytes(
     try {
       const nativeId = await cache.get<number | null>(imageKey, null);
       if (nativeId != null) {
-        return await runtime.nativeTake(nativeId);
+        return await native.take(nativeId);
       }
     } catch {
       // nativeTake 失败或缓存未命中，继续回退到 URL 下载
