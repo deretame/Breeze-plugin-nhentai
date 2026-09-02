@@ -71,6 +71,18 @@ pnpm run dev
 
 dev server 启动后输出 bundle 地址，在 Breeze 中通过"网络安装"加载即可调试。支持热更新。
 
+## 标签翻译数据库
+
+标签翻译使用 [EhTagTranslation/Database](https://github.com/EhTagTranslation/Database) 的最新 Release 数据。首次构建前需要下载数据库：
+
+```powershell
+$env:GITHUB_TOKEN = "your_token"
+pnpm run init
+pnpm run build
+```
+
+生成的 `src/data.js` 仅作为本地构建数据，不纳入 Git；插件打包后会将翻译数据一并内置。
+
 ## 构建
 
 ```bash

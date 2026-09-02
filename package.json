@@ -1,12 +1,13 @@
 {
   "name": "breeze-plugin-nhentai",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "type": "module",
   "packageManager": "pnpm@11.5.1",
   "files": [
     "dist"
   ],
   "scripts": {
+    "init": "node init.js",
     "typecheck": "tsc --noEmit",
     "build": "pnpm typecheck && node --import tsx build/generate-version.ts && node --import tsx build/generate-manifest.ts && cross-env NODE_OPTIONS=\"--import tsx\" rspack build && node --import tsx build/generate-brotli.ts",
     "dev": "pnpm dev:serve",
@@ -21,7 +22,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "breeze-plugin-kit": "^0.3.0",
+    "breeze-plugin-kit": "^0.6.0",
     "fflate": "^0.8.3"
   }
 }

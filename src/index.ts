@@ -40,10 +40,10 @@ import {
   PLUGIN_ID,
   createActionItem,
   createImage,
-  createMetadataActionList,
   toStringMap,
 } from "./common";
 import { buildPluginInfo } from "./get-info";
+import { translateTag } from "./utils/tag-translation";
 
 const WEB_BASE = "https://nhentai.net";
 const API_BASE = "https://nhentai.net/api/v2";
@@ -214,8 +214,12 @@ function tagsByType(tags: NhentaiTag[], type: string): string[] {
     .filter(Boolean);
 }
 
-function createSearchAction(type: string, value: string): ActionItem {
-  return createActionItem(value, {
+function createSearchAction(
+  type: string,
+  value: string,
+  displayValue = value,
+): ActionItem {
+  return createActionItem(displayValue, {
     type: "openSearch",
     payload: {
       source: PLUGIN_ID,
@@ -693,9 +697,21 @@ function buildMetadata(gallery: NhentaiGallery): MetadataListItem[] {
   const tags = asArray<NhentaiTag>(gallery.tags);
   const metadata: MetadataListItem[] = [];
   const push = (type: string, name: string, values: unknown) => {
-    const item = createMetadataActionList(type, name, values, (value) =>
-      createSearchAction(type, value),
-    );
+    const list = Array.isArray(values)
+      ? values
+      : values == null
+        ? []
+        : [values];
+    const item: MetadataListItem = {
+      type,
+      name,
+      value: list
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+        .map((value) =>
+          createSearchAction(type, value, translateTag(type, value)),
+        ),
+    };
     if (item.value.length > 0) metadata.push(item);
   };
 
@@ -706,6 +722,24 @@ function buildMetadata(gallery: NhentaiGallery): MetadataListItem[] {
   push("character", "角色", tagsByType(tags, "character"));
   push("category", "分类", tagsByType(tags, "category"));
   push("tag", "标签", tagsByType(tags, "tag"));
+
+  const id = galleryId(gallery);
+  if (id) {
+    metadata.push({
+      type: "web",
+      name: "网页",
+      value: [
+        createActionItem("在网页打开", {
+          type: "openWeb",
+          payload: {
+            title: selectTitle(gallery),
+            url: `${WEB_BASE}/g/${id}/`,
+          },
+        }),
+      ],
+    });
+  }
+
   return metadata;
 }
 
@@ -950,7 +984,10 @@ async function searchComic(
 async function getComicDetail(
   payload: ComicDetailPayload = {},
 ): Promise<ComicDetailContract> {
-  const comicId = toText(payload.comicId);
+  let comicId = toText(payload.comicId);
+  if (comicId === "random") {
+    comicId = await fetchRandomGalleryId();
+  }
   const [apiKey, gallery, totalComments] = await Promise.all([
     loadApiKey(payload.extern ?? {}),
     fetchGallery(comicId),

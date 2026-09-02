@@ -7,7 +7,7 @@
     "describe": "nhentai source adapter"
   },
   "describe": "nhentai 漫画源插件",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "updateUrl": "https://api.github.com/repos/deretame/Breeze-plugin-nhentai/releases/latest",
   "home": "https://github.com/deretame/Breeze-plugin-nhentai",
   "npmName": "breeze-plugin-nhentai",
@@ -85,20 +85,9 @@
       "id": "random",
       "title": "手气不错",
       "action": {
-        "type": "openComicList",
+        "type": "openComicInfo",
         "payload": {
-          "scene": {
-            "title": "手气不错",
-            "source": "416598d0-84d0-4de9-8ec5-e74816e768f2",
-            "body": {
-              "type": "pluginPagedComicList",
-              "request": {
-                "fnPath": "getRandomData",
-                "core": {},
-                "extern": {}
-              }
-            }
-          }
+          "comicId": "random"
         }
       }
     }
