@@ -1,6 +1,6 @@
 {
   "name": "breeze-plugin-nhentai",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "type": "module",
   "packageManager": "pnpm@11.5.1",
   "files": [
@@ -16,13 +16,13 @@
   "devDependencies": {
     "@rspack/cli": "^2.0.5",
     "@rspack/core": "^2.0.5",
-    "@types/node": "^25.9.1",
+    "@types/node": "^26",
     "cross-env": "^10.1.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "breeze-plugin-kit": "^0.6.0",
+    "breeze-plugin-kit": "^0.12.0",
     "fflate": "^0.8.3"
   }
 }

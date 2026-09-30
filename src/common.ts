@@ -4,6 +4,7 @@ export const PLACEHOLDER_IMAGE_PATH = "placeholder/image-404.png";
 
 import type {
   ActionItem,
+  ComicInfoPageAction,
   ComicListItem,
   ImageItem,
   MetadataListItem,
@@ -20,7 +21,7 @@ export function toStringMap(value: unknown): StringMap {
 
 export function createActionItem(
   name: unknown,
-  onTap: StringMap = {},
+  onTap: ComicInfoPageAction | null = null,
   extern: StringMap = {},
 ): ActionItem {
   // Keep all action payloads normalized so downstream schema consumers do not

@@ -12,7 +12,7 @@ export function buildPluginInfo(): InfoContract {
       describe: "nhentai source adapter",
     },
     describe: "nhentai 漫画源插件",
-    version: "0.0.5",
+    version: "0.0.6",
     updateUrl:
       "https://api.github.com/repos/deretame/Breeze-plugin-nhentai/releases/latest",
     home: "https://github.com/deretame/Breeze-plugin-nhentai",
@@ -89,10 +89,11 @@ export function buildPluginInfo(): InfoContract {
         id: "random",
         title: "手气不错",
         action: {
-          type: "openComicInfo" as any,
+          type: "openComicInfo" as const,
           payload: {
             comicId: "random",
-          } as any,
+            extern: {},
+          },
         },
       },
     ],

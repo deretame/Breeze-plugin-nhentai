@@ -856,7 +856,6 @@ function buildNormalDetail(
           path: "",
           extern: {},
         }),
-        onTap: {},
         extern: {},
       },
       description: secondaryTitle(gallery),
@@ -874,7 +873,9 @@ function buildNormalDetail(
     allowComments: true,
     allowLike: false,
     allowCollected: Boolean(apiKey),
+    allowCollectedReason: "请先在设置中输入api key",
     allowDownload: Boolean(apiKey),
+    allowDownloadReason: "请先在设置中输入api key",
     extern: {},
   };
 }
