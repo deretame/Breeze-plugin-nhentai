@@ -70,11 +70,7 @@ export function createMetadataActionList(
   };
 }
 
-export function createBasicMetadata(
-  type: string,
-  name: string,
-  values: unknown,
-): MetadataListItem {
+export function createBasicMetadata(type: string, name: string, values: unknown): MetadataListItem {
   const list = Array.isArray(values) ? values : values == null ? [] : [values];
   return {
     type,

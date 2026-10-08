@@ -7,14 +7,9 @@ export function buildPluginInfo(): InfoContract {
     uuid: PLUGIN_ID,
     iconUrl:
       "https://raw.githubusercontent.com/deretame/Breeze-plugin-nhentai/main/assets/Nhentai_idAD-FU-t__1.svg",
-    creator: {
-      name: "Breeze plugin",
-      describe: "nhentai source adapter",
-    },
     describe: "nhentai 漫画源插件",
-    version: "0.0.6",
-    updateUrl:
-      "https://api.github.com/repos/deretame/Breeze-plugin-nhentai/releases/latest",
+    version: "0.0.7",
+    updateUrl: "https://api.github.com/repos/deretame/Breeze-plugin-nhentai/releases/latest",
     home: "https://github.com/deretame/Breeze-plugin-nhentai",
     npmName: "breeze-plugin-nhentai",
     function: [

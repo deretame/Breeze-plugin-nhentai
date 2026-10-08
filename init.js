@@ -30,9 +30,7 @@ https
     let body = "";
 
     if (response.statusCode !== 200) {
-      console.error(
-        `❌ API 请求失败 [${response.statusCode}]。请检查 Token 是否有效或是否超限。`,
-      );
+      console.error(`❌ API 请求失败 [${response.statusCode}]。请检查 Token 是否有效或是否超限。`);
       return;
     }
 
