@@ -11,11 +11,11 @@ import type {
   ComicDetailNormal,
   ComicDetailPayload,
   ComicListItem,
+  ComicListSceneBundleContract,
   ComicPagedListContract,
   CommentFeedContract,
   CommentFeedPayload,
   CommentItem,
-  ComicListSceneBundleContract,
   FetchImageBytesPayload,
   FilterBundleContract,
   InfoContract,
@@ -152,7 +152,9 @@ type NhentaiBlacklistResponse = {
 };
 
 function asRecord(value: unknown): JsonRecord {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as JsonRecord)
+    : {};
 }
 
 function asArray<T>(value: unknown): T[] {
@@ -221,7 +223,11 @@ function tagsByType(tags: NhentaiTag[], type: string): string[] {
     .filter(Boolean);
 }
 
-function createSearchAction(type: string, value: string, displayValue = value): ActionItem {
+function createSearchAction(
+  type: string,
+  value: string,
+  displayValue = value,
+): ActionItem {
   return createActionItem(displayValue, {
     type: "openSearch",
     payload: {
@@ -267,7 +273,11 @@ function buildSearchUrl(keyword: string, page: number, sort: string): string {
 
 async function fetchJson<T>(url: string, timeoutMs?: number): Promise<T>;
 
-async function fetchJson<T>(url: string, extern?: unknown, timeoutMs?: number): Promise<T>;
+async function fetchJson<T>(
+  url: string,
+  extern?: unknown,
+  timeoutMs?: number,
+): Promise<T>;
 
 async function fetchJson<T>(
   url: string,
@@ -323,14 +333,18 @@ async function fetchCommentCount(comicId: string): Promise<number> {
 }
 
 async function fetchRandomGalleryId(): Promise<string> {
-  const data = await fetchJson<{ id?: number | string }>(`${API_BASE}/galleries/random`);
+  const data = await fetchJson<{ id?: number | string }>(
+    `${API_BASE}/galleries/random`,
+  );
   const id = toText(data.id);
   if (!id) throw new Error("nhentai 未返回随机漫画 ID");
   return id;
 }
 
 async function fetchPopularGalleries(): Promise<NhentaiGallery[]> {
-  const data = await fetchJson<NhentaiGallery[]>(`${API_BASE}/galleries/popular`);
+  const data = await fetchJson<NhentaiGallery[]>(
+    `${API_BASE}/galleries/popular`,
+  );
   return asArray<NhentaiGallery>(data);
 }
 
@@ -343,7 +357,11 @@ async function loadBlacklist(): Promise<void> {
     return;
   }
   try {
-    const data = await fetchJson<NhentaiBlacklistResponse>(`${API_BASE}/blacklist`, {}, 10000);
+    const data = await fetchJson<NhentaiBlacklistResponse>(
+      `${API_BASE}/blacklist`,
+      {},
+      10000,
+    );
     blacklistTags = asArray<NhentaiBlacklistedTag>(data.tags);
   } catch {
     blacklistTags = [];
@@ -450,11 +468,20 @@ async function loadCdnBasesFromConfig(): Promise<{
   return null;
 }
 
-async function saveCdnBasesToConfig(image: string, thumb: string): Promise<void> {
-  await pluginConfig.save(CDN_BASES_CONFIG_KEY, JSON.stringify({ image, thumb }));
+async function saveCdnBasesToConfig(
+  image: string,
+  thumb: string,
+): Promise<void> {
+  await pluginConfig.save(
+    CDN_BASES_CONFIG_KEY,
+    JSON.stringify({ image, thumb }),
+  );
 }
 
-async function measureCdnLatency(url: string, timeoutMs = 5000): Promise<number | null> {
+async function measureCdnLatency(
+  url: string,
+  timeoutMs = 5000,
+): Promise<number | null> {
   const start = Date.now();
   try {
     // 用 /favicon.ico 做探测：图片 CDN 根路径会断开连接，固定路径可得到 HTTP 响应，
@@ -471,14 +498,19 @@ async function measureCdnLatency(url: string, timeoutMs = 5000): Promise<number 
   }
 }
 
-async function selectFastestCdn(urls: string[], timeoutMs = 5000): Promise<string | null> {
+async function selectFastestCdn(
+  urls: string[],
+  timeoutMs = 5000,
+): Promise<string | null> {
   const results = await Promise.all(
     urls.map(async (url) => {
       const latency = await measureCdnLatency(url, timeoutMs);
       return { url, latency };
     }),
   );
-  const valid = results.filter((r): r is { url: string; latency: number } => r.latency != null);
+  const valid = results.filter(
+    (r): r is { url: string; latency: number } => r.latency != null,
+  );
   if (valid.length === 0) return null;
   valid.sort((a, b) => a.latency - b.latency);
   return valid[0].url;
@@ -496,8 +528,12 @@ async function initCdnBases(): Promise<void> {
   const thumbServers = asArray<string>(config.thumb_servers);
 
   const [fastestImage, fastestThumb] = await Promise.all([
-    imageServers.length > 0 ? selectFastestCdn(imageServers) : Promise.resolve(null),
-    thumbServers.length > 0 ? selectFastestCdn(thumbServers) : Promise.resolve(null),
+    imageServers.length > 0
+      ? selectFastestCdn(imageServers)
+      : Promise.resolve(null),
+    thumbServers.length > 0
+      ? selectFastestCdn(thumbServers)
+      : Promise.resolve(null),
   ]);
 
   if (fastestImage) cdnBases.image = fastestImage;
@@ -505,7 +541,10 @@ async function initCdnBases(): Promise<void> {
   await saveCdnBasesToConfig(cdnBases.image, cdnBases.thumb);
 }
 
-async function fetchDownloadUrl(comicId: string, apiKey: string): Promise<string> {
+async function fetchDownloadUrl(
+  comicId: string,
+  apiKey: string,
+): Promise<string> {
   const res = await fetch(
     `${API_BASE}/galleries/${encodeURIComponent(comicId)}/download?format=zip`,
     {
@@ -528,7 +567,10 @@ async function fetchDownloadUrl(comicId: string, apiKey: string): Promise<string
   return url;
 }
 
-async function fetchBinary(url: string, timeoutMs = 120000): Promise<Uint8Array> {
+async function fetchBinary(
+  url: string,
+  timeoutMs = 120000,
+): Promise<Uint8Array> {
   const targetUrl = toText(url);
   if (!targetUrl) throw new Error("下载链接不能为空");
   const res = await fetch(targetUrl, {
@@ -577,7 +619,10 @@ function buildImageKey(comicId: string, imageName: string): string {
   return `${PLUGIN_ID}:${comicId}:${imageName}`;
 }
 
-async function storeZipImages(comicId: string, zipBytes: Uint8Array): Promise<ChapterPage[]> {
+async function storeZipImages(
+  comicId: string,
+  zipBytes: Uint8Array,
+): Promise<ChapterPage[]> {
   const extracted = await unzipAsync(zipBytes);
   const entries = Object.entries(extracted)
     .filter(([name, data]) => isImageFile(name) && data.length > 0)
@@ -609,7 +654,10 @@ async function storeZipImages(comicId: string, zipBytes: Uint8Array): Promise<Ch
   return pages;
 }
 
-function mergeZipPagesWithGallery(zipPages: ChapterPage[], gallery: NhentaiGallery): ChapterPage[] {
+function mergeZipPagesWithGallery(
+  zipPages: ChapterPage[],
+  gallery: NhentaiGallery,
+): ChapterPage[] {
   const galleryPages = asArray<NhentaiPage>(gallery.pages);
   return zipPages.map((page, index) => {
     const galleryPage = galleryPages[index];
@@ -658,14 +706,20 @@ function buildMetadata(gallery: NhentaiGallery): MetadataListItem[] {
   const tags = asArray<NhentaiTag>(gallery.tags);
   const metadata: MetadataListItem[] = [];
   const push = (type: string, name: string, values: unknown) => {
-    const list = Array.isArray(values) ? values : values == null ? [] : [values];
+    const list = Array.isArray(values)
+      ? values
+      : values == null
+        ? []
+        : [values];
     const item: MetadataListItem = {
       type,
       name,
       value: list
         .map((value) => String(value ?? "").trim())
         .filter(Boolean)
-        .map((value) => createSearchAction(type, value, translateTag(type, value))),
+        .map((value) =>
+          createSearchAction(type, value, translateTag(type, value)),
+        ),
     };
     if (item.value.length > 0) metadata.push(item);
   };
@@ -703,7 +757,10 @@ function buildListItem(gallery: NhentaiGallery): ComicListItem {
   const title = selectTitle(gallery);
   const pageCount = galleryPageCount(gallery);
   const uploaded = formatDate(gallery.upload_date);
-  const subtitleParts = [pageCount ? `${pageCount} pages` : "", uploaded].filter(Boolean);
+  const subtitleParts = [
+    pageCount ? `${pageCount} pages` : "",
+    uploaded,
+  ].filter(Boolean);
 
   return {
     source: PLUGIN_ID,
@@ -771,7 +828,8 @@ function buildNormalDetail(
 ): ComicDetailNormal {
   const id = galleryId(gallery);
   const title = selectTitle(gallery);
-  const japaneseTitle = toText(gallery.japanese_title) || secondaryTitle(gallery);
+  const japaneseTitle =
+    toText(gallery.japanese_title) || secondaryTitle(gallery);
   const pageCount = galleryPageCount(gallery);
   const uploaded = formatDate(gallery.upload_date);
   const titleMeta = [
@@ -779,7 +837,9 @@ function buildNormalDetail(
       ? createActionItem(`Japanese: ${japaneseTitle}`)
       : null,
     id ? createActionItem(`ID: ${id}`) : null,
-    gallery.media_id != null ? createActionItem(`Media ID: ${toText(gallery.media_id)}`) : null,
+    gallery.media_id != null
+      ? createActionItem(`Media ID: ${toText(gallery.media_id)}`)
+      : null,
     pageCount ? createActionItem(`${pageCount} pages`) : null,
     uploaded ? createActionItem(uploaded) : null,
   ].filter(Boolean) as ActionItem[];
@@ -825,7 +885,13 @@ function buildNormalDetail(
 
 function currentSort(extern: unknown): string {
   const value = toText(toStringMap(extern).sortBy);
-  const allowed = new Set(["date", "popular", "popular-today", "popular-week", "popular-month"]);
+  const allowed = new Set([
+    "date",
+    "popular",
+    "popular-today",
+    "popular-week",
+    "popular-month",
+  ]);
   return allowed.has(value) ? value : "date";
 }
 
@@ -853,7 +919,9 @@ async function getInfo(): Promise<InfoContract> {
   return buildPluginInfo();
 }
 
-async function searchComic(payload: SearchComicPayload = {}): Promise<SearchResultContract> {
+async function searchComic(
+  payload: SearchComicPayload = {},
+): Promise<SearchResultContract> {
   await ensureBlacklistLoaded();
   const page = Math.max(1, toNumber(payload.page, 1));
   const rawKeyword = toText(payload.keyword);
@@ -889,7 +957,9 @@ async function searchComic(payload: SearchComicPayload = {}): Promise<SearchResu
 
   const keyword = buildSearchQuery(rawKeyword, payload.extern);
   const sort = currentSort(payload.extern);
-  const data = await fetchJson<NhentaiSearchResponse>(buildSearchUrl(keyword, page, sort));
+  const data = await fetchJson<NhentaiSearchResponse>(
+    buildSearchUrl(keyword, page, sort),
+  );
   const pages = Math.max(1, toNumber(data.num_pages, 1));
   const total = toNumber(data.total, asArray(data.result).length);
   const items = asArray<NhentaiGallery>(data.result).map(buildListItem);
@@ -915,7 +985,9 @@ async function searchComic(payload: SearchComicPayload = {}): Promise<SearchResu
   };
 }
 
-async function getComicDetail(payload: ComicDetailPayload = {}): Promise<ComicDetailContract> {
+async function getComicDetail(
+  payload: ComicDetailPayload = {},
+): Promise<ComicDetailContract> {
   let comicId = toText(payload.comicId);
   if (comicId === "random") {
     comicId = await fetchRandomGalleryId();
@@ -941,7 +1013,9 @@ async function getComicDetail(payload: ComicDetailPayload = {}): Promise<ComicDe
   };
 }
 
-async function getReadSnapshot(payload: ReadSnapshotPayload = {}): Promise<ReadSnapshotContract> {
+async function getReadSnapshot(
+  payload: ReadSnapshotPayload = {},
+): Promise<ReadSnapshotContract> {
   const comicId = toText(payload.comicId);
   const gallery = await fetchGallery(comicId);
   const chapter = buildChapterWithPages(gallery);
@@ -969,12 +1043,15 @@ async function getReadSnapshot(payload: ReadSnapshotPayload = {}): Promise<ReadS
   };
 }
 
-async function getChapter(payload: ChapterPayload = {}): Promise<ChapterContentContract> {
+async function getChapter(
+  payload: ChapterPayload = {},
+): Promise<ChapterContentContract> {
   const comicId = toText(payload.comicId);
   if (!comicId) throw new Error("comicId 不能为空");
 
   const apiKey = await loadApiKey(payload.extern);
-  if (!apiKey) throw buildUnauthorizedError(PLUGIN_ID, "请设置 nhentai API Key");
+  if (!apiKey)
+    throw buildUnauthorizedError(PLUGIN_ID, "请设置 nhentai API Key");
 
   const downloadUrl = await fetchDownloadUrl(comicId, apiKey);
   const zipBytes = await fetchBinary(downloadUrl);
@@ -1120,7 +1197,9 @@ async function getComicListSceneBundle(): Promise<ComicListSceneBundleContract> 
   };
 }
 
-async function getRankingData(payload: SearchComicPayload = {}): Promise<ComicPagedListContract> {
+async function getRankingData(
+  payload: SearchComicPayload = {},
+): Promise<ComicPagedListContract> {
   const result = await searchComic(payload);
   return {
     source: PLUGIN_ID,
@@ -1137,7 +1216,9 @@ async function getRankingData(payload: SearchComicPayload = {}): Promise<ComicPa
   };
 }
 
-async function getFavoritesData(payload: SearchComicPayload = {}): Promise<ComicPagedListContract> {
+async function getFavoritesData(
+  payload: SearchComicPayload = {},
+): Promise<ComicPagedListContract> {
   const apiKey = await loadApiKey(payload.extern ?? {});
   if (!apiKey) {
     throw buildUnauthorizedError(PLUGIN_ID, "请设置 nhentai API Key");
@@ -1169,7 +1250,9 @@ async function getFavoritesData(payload: SearchComicPayload = {}): Promise<Comic
   };
 }
 
-async function getPopularData(payload: SearchComicPayload = {}): Promise<ComicPagedListContract> {
+async function getPopularData(
+  payload: SearchComicPayload = {},
+): Promise<ComicPagedListContract> {
   const galleries = await fetchPopularGalleries();
   const items = galleries.map(buildListItem);
   return {
@@ -1184,7 +1267,9 @@ async function getPopularData(payload: SearchComicPayload = {}): Promise<ComicPa
   };
 }
 
-async function getRandomData(payload: SearchComicPayload = {}): Promise<ComicPagedListContract> {
+async function getRandomData(
+  payload: SearchComicPayload = {},
+): Promise<ComicPagedListContract> {
   const page = Math.max(1, toNumber(payload.page, 1));
   if (page > 1) {
     return {
@@ -1212,7 +1297,9 @@ async function getRandomData(payload: SearchComicPayload = {}): Promise<ComicPag
   };
 }
 
-async function toggleFavorite(payload: ToggleFavoritePayload = {}): Promise<ToggleFavoriteResult> {
+async function toggleFavorite(
+  payload: ToggleFavoritePayload = {},
+): Promise<ToggleFavoriteResult> {
   const apiKey = await loadApiKey(payload.extern ?? {});
   if (!apiKey) {
     throw buildUnauthorizedError(PLUGIN_ID, "请设置 nhentai API Key");
@@ -1225,16 +1312,19 @@ async function toggleFavorite(payload: ToggleFavoritePayload = {}): Promise<Togg
 
   const currentFavorite = Boolean(payload.currentFavorite);
   const method = currentFavorite ? "DELETE" : "POST";
-  const res = await fetch(`${API_BASE}/galleries/${encodeURIComponent(comicId)}/favorite`, {
-    method,
-    headers: {
-      Accept: "application/json",
-      Authorization: `Key ${apiKey}`,
-      Referer: `${WEB_BASE}/`,
-      "User-Agent": "Breeze-plugin-nhentai/0.1.0",
+  const res = await fetch(
+    `${API_BASE}/galleries/${encodeURIComponent(comicId)}/favorite`,
+    {
+      method,
+      headers: {
+        Accept: "application/json",
+        Authorization: `Key ${apiKey}`,
+        Referer: `${WEB_BASE}/`,
+        "User-Agent": "Breeze-plugin-nhentai/0.1.0",
+      },
+      signal: AbortSignal.timeout(15000),
     },
-    signal: AbortSignal.timeout(15000),
-  });
+  );
   if (!res.ok) {
     throw new Error(`nhentai 收藏操作失败: HTTP ${res.status}`);
   }
@@ -1325,7 +1415,9 @@ async function getRankingFilterBundle(): Promise<FilterBundleContract> {
   };
 }
 
-async function getCommentFeed(payload: CommentFeedPayload = {}): Promise<CommentFeedContract> {
+async function getCommentFeed(
+  payload: CommentFeedPayload = {},
+): Promise<CommentFeedContract> {
   const comicId = toText(payload.comicId);
   if (!comicId) throw new Error("comicId 不能为空");
 
@@ -1340,26 +1432,30 @@ async function getCommentFeed(payload: CommentFeedPayload = {}): Promise<Comment
   );
   const pages = Math.max(1, toNumber(data.num_pages, 1));
   const hasReachedMax = page >= pages;
-  const items: CommentItem[] = asArray<NhentaiComment>(data.result).map((comment, index) => {
-    const author = asRecord(comment.poster);
-    const avatarPath = toText(author.avatar_url);
-    const avatarUrl = avatarPath ? absolutize(cdnBases.image, avatarPath) : "";
-    return {
-      id: toText(comment.id) || `comment-${index + 1}`,
-      author: {
-        name: toText(author.username) || "anonymous",
-        avatar: {
-          url: avatarUrl || NOT_FOUND_IMAGE_URL,
-          path: avatarPath,
+  const items: CommentItem[] = asArray<NhentaiComment>(data.result).map(
+    (comment, index) => {
+      const author = asRecord(comment.poster);
+      const avatarPath = toText(author.avatar_url);
+      const avatarUrl = avatarPath
+        ? absolutize(cdnBases.image, avatarPath)
+        : "";
+      return {
+        id: toText(comment.id) || `comment-${index + 1}`,
+        author: {
+          name: toText(author.username) || "anonymous",
+          avatar: {
+            url: avatarUrl || NOT_FOUND_IMAGE_URL,
+            path: avatarPath,
+          },
         },
-      },
-      content: toText(comment.body),
-      createdAt: formatDate(comment.post_date),
-      replyCount: 0,
-      replies: [],
-      extern: {},
-    };
-  });
+        content: toText(comment.body),
+        createdAt: formatDate(comment.post_date),
+        replyCount: 0,
+        replies: [],
+        extern: {},
+      };
+    },
+  );
 
   return {
     source: PLUGIN_ID,
@@ -1417,6 +1513,7 @@ async function getLoginBundle(): Promise<LoginBundleContract> {
         kind: "text",
         label: "nhentai API Key",
         help: "在 nhentai 设置页获取 API Key 后粘贴到此处",
+        required: true,
       },
     ],
     submitFnPath: "submitApiKeyLogin",
@@ -1445,35 +1542,58 @@ async function submitApiKeyLogin(
   };
 }
 
+/**
+ * 旧宿主（< 3.0.34，不懂 getLoginBundle）才显示 settings apiKey 区。
+ * 三段比较：缺段按 0 补齐。
+ */
+function compareVersions(a: string, b: string): number {
+  // dart.getAppVersion 返回 JSON 编码串（首尾带引号），先剥掉。
+  const clean = (v: string) => String(v ?? "").trim().replace(/^"+|"+$/g, "");
+  const pa = clean(a)
+    .split(".")
+    .map((x) => Number(x) || 0);
+  const pb = clean(b)
+    .split(".")
+    .map((x) => Number(x) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i += 1) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 async function getSettingsBundle(): Promise<SettingsBundleContract> {
   const apiKey = await loadApiKey({});
+  const version = await flutterTools.getAppVersion();
+  const legacyHost = compareVersions(version, "3.0.34") < 0;
   return {
     source: PLUGIN_ID,
     scheme: {
       version: "1.0.0",
       type: "settings",
-      sections: [
-        {
-          id: "account",
-          title: "账户",
-          fields: [
+      sections: legacyHost
+        ? [
             {
-              key: API_KEY_CONFIG_KEY,
-              kind: "text",
-              label: "nhentai API Key",
-              persist: true,
-              fnPath: "onApiKeyChanged",
+              id: "account",
+              title: "账户",
+              fields: [
+                {
+                  key: API_KEY_CONFIG_KEY,
+                  kind: "text",
+                  label: "nhentai API Key",
+                  persist: true,
+                  fnPath: "onApiKeyChanged",
+                },
+              ],
             },
-          ],
-        },
-      ],
+          ]
+        : [],
     },
     data: {
       canShowUserInfo: true,
       canLogin: true,
-      values: {
-        [API_KEY_CONFIG_KEY]: apiKey,
-      },
+      values: legacyHost ? { [API_KEY_CONFIG_KEY]: apiKey } : {},
     },
   };
 }
@@ -1542,7 +1662,10 @@ async function getUserInfoBundle(): Promise<UserInfoBundleContract> {
     const username = toText(user.username) || "User";
     const avatarPath = toText(user.avatar_url);
     const avatarUrl = avatarPath ? absolutize(cdnBases.image, avatarPath) : "";
-    const lines = [`ID: ${toText(user.id) || ""}`, `Slug: ${toText(user.slug) || ""}`];
+    const lines = [
+      `ID: ${toText(user.id) || ""}`,
+      `Slug: ${toText(user.slug) || ""}`,
+    ];
     const about = toText(user.about);
     if (about) lines.push(`简介: ${about}`);
     const favoriteTags = toText(user.favorite_tags);
