@@ -1051,7 +1051,7 @@ async function getChapter(
 
   const apiKey = await loadApiKey(payload.extern);
   if (!apiKey)
-    throw buildUnauthorizedError(PLUGIN_ID, "请设置 nhentai API Key");
+    throw await authError("请设置 nhentai API Key");
 
   const downloadUrl = await fetchDownloadUrl(comicId, apiKey);
   const zipBytes = await fetchBinary(downloadUrl);
@@ -1221,7 +1221,7 @@ async function getFavoritesData(
 ): Promise<ComicPagedListContract> {
   const apiKey = await loadApiKey(payload.extern ?? {});
   if (!apiKey) {
-    throw buildUnauthorizedError(PLUGIN_ID, "请设置 nhentai API Key");
+    throw await authError("请设置 nhentai API Key");
   }
 
   const page = Math.max(1, toNumber(payload.page, 1));
@@ -1302,7 +1302,7 @@ async function toggleFavorite(
 ): Promise<ToggleFavoriteResult> {
   const apiKey = await loadApiKey(payload.extern ?? {});
   if (!apiKey) {
-    throw buildUnauthorizedError(PLUGIN_ID, "请设置 nhentai API Key");
+    throw await authError("请设置 nhentai API Key");
   }
 
   const comicId = toText(payload.comicId);
@@ -1563,10 +1563,23 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
+async function isLegacyHost(): Promise<boolean> {
+  const version = await flutterTools.getAppVersion();
+  return compareVersions(version, "3.0.34") < 0;
+}
+
+/**
+ * 新宿主抛 unauthorized（跳登录页），旧宿主抛老格式普通 Error
+ *（旧登录页是账号密码表单，nhentai 用不上；toast 指引去设置页）。
+ */
+async function authError(message: string): Promise<Error> {
+  if (await isLegacyHost()) return new Error(message);
+  return buildUnauthorizedError(PLUGIN_ID, message);
+}
+
 async function getSettingsBundle(): Promise<SettingsBundleContract> {
   const apiKey = await loadApiKey({});
-  const version = await flutterTools.getAppVersion();
-  const legacyHost = compareVersions(version, "3.0.34") < 0;
+  const legacyHost = await isLegacyHost();
   return {
     source: PLUGIN_ID,
     scheme: {
