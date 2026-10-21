@@ -167,8 +167,8 @@ importers:
   .:
     dependencies:
       breeze-plugin-kit:
-        specifier: ^0.14.0
-        version: 0.14.0
+        specifier: ^0.18.0
+        version: 0.18.0
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
@@ -974,8 +974,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  breeze-plugin-kit@0.14.0:
-    resolution: {integrity: sha512-fEbx4W8y6jw3XsIUYaCqNcAUZRPdqlxMV7B8/G8B1vHSATwLIVKOp2YWQB2qGgd0xcVMzpxacEqu136AjFwEZw==}
+  breeze-plugin-kit@0.18.0:
+    resolution: {integrity: sha512-8ePR2iYZcv7Rf/VHx9HEFWM/PkLYY5+7P6aRZKFh1I/uQv0dviPM0yqjWqzotPRRUvIS1UcnXY8NRvh+3zgVxg==}
 
   cross-env@10.1.0:
     resolution: {integrity: sha512-GsYosgnACZTADcmEyJctkJIoqAhHjttw7RsFrVoJNXbsWWqaq6Ym+7kZjq6mS45O0jij6vtiReppKQEtqWy6Dw==}
@@ -1487,7 +1487,7 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  breeze-plugin-kit@0.14.0: {}
+  breeze-plugin-kit@0.18.0: {}
 
   cross-env@10.1.0:
     dependencies:

@@ -24,6 +24,9 @@ import type {
   LoginSubmitResult,
   MetadataListItem,
   MoveFavoriteToFolderPayload,
+  PluginCloudFavoritePagesBundleContract,
+  PluginHomePagesBundleContract,
+  PluginHomeTab,
   ReadSnapshotContract,
   ReadSnapshotPayload,
   RecommendItem,
@@ -403,6 +406,7 @@ async function loadApiKey(extern: unknown): Promise<string> {
 }
 
 async function validateApiKey(apiKey: string): Promise<boolean> {
+  console.info(`[nhentai] validate key len=${apiKey.length} head=${apiKey.slice(0, 6)} tail=${apiKey.slice(-4)}`);
   try {
     const res = await fetch(`${API_BASE}/user`, {
       method: "GET",
@@ -415,11 +419,17 @@ async function validateApiKey(apiKey: string): Promise<boolean> {
       signal: AbortSignal.timeout(10000),
     });
     if (res.status === 401 || res.status === 403) {
+      console.warn(`[nhentai] validate api key invalid: HTTP ${res.status}`);
       return false;
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(`[nhentai] validate api key unexpected: HTTP ${res.status} body=${body.slice(0, 200)}`);
     }
     // 网络抖动或 5xx 时不贸然判定为失效
     return true;
-  } catch {
+  } catch (error) {
+    console.warn(`[nhentai] validate api key network error`, error);
     return true;
   }
 }
@@ -441,13 +451,28 @@ async function showInvalidApiKeyWarning(): Promise<void> {
   }
 }
 
-async function ensureApiKeyValid(): Promise<void> {
+async function validateApiKeyForInit(): Promise<void> {
   const apiKey = await loadApiKey({});
-  if (!apiKey) return;
-  if (!(await validateApiKey(apiKey))) {
-    await clearApiKey();
-    await showInvalidApiKeyWarning();
+  if (!apiKey) {
+    console.info("[nhentai.init] skip login: no api key");
+    return;
   }
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      if (await validateApiKey(apiKey)) {
+        console.info(`[nhentai.init] api key ok (attempt ${attempt})`);
+        return;
+      }
+      throw new Error("API Key 无效");
+    } catch (error) {
+      lastError = error;
+      console.warn(`[nhentai.init] api key check failed (attempt ${attempt}/3)`, error);
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`API Key 校验失败，已重试 3 次: ${String(lastError)}`);
 }
 
 async function loadCdnBasesFromConfig(): Promise<{
@@ -895,7 +920,7 @@ function currentSort(extern: unknown): string {
   return allowed.has(value) ? value : "date";
 }
 
-async function init() {
+async function init(): Promise<{ source: string; data: Record<string, unknown> }> {
   try {
     await initCdnBases();
   } catch (err) {
@@ -908,11 +933,12 @@ async function init() {
     // 黑名单加载失败不影响搜索，只是不过滤
     console.error("[nhentai] 黑名单加载失败:", err);
   }
-  try {
-    await ensureApiKeyValid();
-  } catch (err) {
-    console.error("[nhentai] API Key 校验失败:", err);
-  }
+  // 有 key 则校验（最多 3 次），失败抛错；无 key 直接通过。
+  await validateApiKeyForInit();
+  return {
+    source: PLUGIN_ID,
+    data: { ok: true },
+  };
 }
 
 async function getInfo(): Promise<InfoContract> {
@@ -1486,16 +1512,33 @@ async function onApiKeyChanged(payload: Record<string, unknown> = {}): Promise<{
     };
   }
 
-  if (!(await validateApiKey(apiKey))) {
+  // 新 key 服务端可能有同步延迟：401/403 连判 3 次（间隔 3s）都失败才判无效；
+  // 网络异常/5xx 不判无效（validateApiKey 已放行），存下来后面 init 再验。
+  let invalidCount = 0;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    if (await validateApiKey(apiKey)) {
+      invalidCount = 0;
+      break;
+    }
+    invalidCount += 1;
+    console.warn(`[nhentai] api key check ${attempt}/3 invalid`);
+    if (attempt < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  }
+  if (invalidCount >= 3) {
     await clearApiKey();
     await showInvalidApiKeyWarning();
     return {
       ok: false,
-      message: "API Key 已失效，请重新设置 nhentai API Key",
+      message: "API Key 已失效请重新设置 nhentai API Key",
       raw: "",
     };
   }
 
+  // 存裸字符串：Dart 侧 jsonDecode 失败存原串，load 读 parsed.value 即原 key。
+  // 之前包了一层 {value} 导致 Dart 解一层后 value 还是对象，读出来变 "[object Object]"。
+  await pluginConfig.save(API_KEY_CONFIG_KEY, apiKey);
   return {
     ok: true,
     message: "API Key 已保存",
@@ -1718,6 +1761,84 @@ async function getUserInfoBundle(): Promise<UserInfoBundleContract> {
   }
 }
 
+async function getPluginHomePagesBundle(): Promise<PluginHomePagesBundleContract> {
+  const latestTab: PluginHomeTab = {
+    id: "latest",
+    title: "最新",
+    scene: {
+      title: "nhentai",
+      source: PLUGIN_ID,
+      body: {
+        type: "pluginPagedComicList",
+        request: {
+          fnPath: "getRankingData",
+          core: {},
+          extern: { sortBy: "date" },
+        },
+      },
+      filter: {
+        fnPath: "getRankingFilterBundle",
+        extern: {},
+      },
+    },
+  };
+  const popularTab: PluginHomeTab = {
+    id: "popular",
+    title: "热门",
+    scene: {
+      title: "今日热门",
+      source: PLUGIN_ID,
+      body: {
+        type: "pluginPagedComicList",
+        request: {
+          fnPath: "getPopularData",
+          core: {},
+          extern: {},
+        },
+      },
+    },
+  };
+  return {
+    source: PLUGIN_ID,
+    scheme: {
+      version: "1.0.0",
+      type: "homePagesBundle",
+    },
+    data: {
+      tabs: [latestTab, popularTab],
+    },
+  };
+}
+
+async function getPluginCloudFavoritePagesBundle(): Promise<PluginCloudFavoritePagesBundleContract> {
+  const favoritesTab: PluginHomeTab = {
+    id: "favorites",
+    title: "收藏",
+    scene: {
+      title: "我的收藏",
+      source: PLUGIN_ID,
+      body: {
+        type: "pluginPagedComicList",
+        request: {
+          fnPath: "getFavoritesData",
+          core: {},
+          extern: {},
+        },
+      },
+    },
+  };
+  return {
+    source: PLUGIN_ID,
+    scheme: {
+      version: "1.0.0",
+      type: "cloudFavoritePagesBundle",
+    },
+    data: {
+      tabs: [favoritesTab],
+    },
+  };
+}
+
 export default {
   init,
   getInfo,
@@ -1743,4 +1864,6 @@ export default {
   toggleFavorite,
   listFavoriteFolders,
   moveFavoriteToFolder,
+  getPluginHomePagesBundle,
+  getPluginCloudFavoritePagesBundle,
 };
